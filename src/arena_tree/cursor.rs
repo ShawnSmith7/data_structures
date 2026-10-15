@@ -31,19 +31,11 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         tree.get(self.id)
     }
 
-    pub unsafe fn get_unchecked(&self, tree: &'a ArenaTree<T, N>) -> &'a Node<T, N> {
-        tree.get(self.id)
-    }
-
     pub fn set_checked(&self, val: T, tree: &mut ArenaTree<T, N>) -> Result<(), ArenaTreeError<N>> {
         tree.set_checked(self.id, val)
     }
 
     pub fn set(&self, val: T, tree: &mut ArenaTree<T, N>) {
-        tree.set(self.id, val)
-    }
-
-    pub unsafe fn set_unchecked(&self, val: T, tree: &mut ArenaTree<T, N>) {
         tree.set(self.id, val)
     }
 
@@ -55,10 +47,6 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         tree.add_node(val, self.id, branch)
     }
 
-    pub unsafe fn add_node_unchecked(&self, val: T, branch: usize, tree: &mut ArenaTree<T, N>) -> usize {
-        tree.add_node(val, self.id, branch)
-    }
-
     pub fn delete_branch_checked(&self, branch: usize, tree: &mut ArenaTree<T, N>) -> Result<(), ArenaTreeError<N>> {
         tree.delete_branch_checked(self.id, branch)
     }
@@ -67,31 +55,17 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         tree.delete_branch(self.id, branch)
     }
 
-    pub unsafe fn delete_branch_unchecked(&self, branch: usize, tree: &mut ArenaTree<T, N>) {
-        tree.delete_branch(self.id, branch)
-    }
-
     pub fn move_to_child_checked(&mut self, branch: usize, tree: &ArenaTree<T, N>) -> Result<NodeId, ArenaTreeError<N>> {
-        let id = Id(self.get_checked(tree)?
+        self.id = Id(self.get_checked(tree)?
             .get_branch_checked(branch)?
             .ok_or(BranchDoesNotExist { branch, id: self.id })?
         );
-
-        self.id = id;
-        Ok(id)
+        Ok(self.id)
     }
 
     pub fn move_to_child(&mut self, branch: usize, tree: &ArenaTree<T, N>) -> NodeId {
-        self.move_to_child_checked(branch, tree).expect("Invalid state passed to ArenaTreeCursor::move_to_child")
-    }
-
-    pub unsafe fn move_to_child_unchecked(&mut self, branch: usize, tree: &ArenaTree<T, N>) -> NodeId {
-        let id = unsafe {
-            Id(self.get_unchecked(tree).branches.get_unchecked(branch).unwrap())
-        };
-
-        self.id = id;
-        id
+        self.id = Id(self.get(tree).get_branch(branch).unwrap());
+        self.id
     }
 
     pub fn move_to_parent_checked(&mut self, tree: &ArenaTree<T, N>) -> Result<NodeId, ArenaTreeError<N>> {
@@ -105,16 +79,15 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
     }
 
     pub fn move_to_parent(&mut self, tree: &ArenaTree<T, N>) -> NodeId {
-        self.move_to_parent_checked(tree).expect("Invalid state passed to ArenaTreeCursor::move_to_parent")
-    }
-
-    pub unsafe fn move_to_parent_unchecked(&mut self, tree: &ArenaTree<T, N>) -> NodeId {
-        let id = unsafe {
-            self.get_unchecked(tree).parent_id
-        };
-
-        self.id = id;
-        id
+        #[cfg(debug_assertions)]
+        {
+            self.move_to_parent_checked(tree).unwrap()
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self.id = self.get(tree).parent_id;
+            self.id
+        }
     }
 }
 
@@ -149,26 +122,16 @@ macro_rules! define_cursor {
             }
 
             pub fn move_to_child_checked(&mut self, branch: usize) -> Result<NodeId, ArenaTreeError<N>> {
-                let id = Id(self.get()
+                self.inner.id = Id(self.get()
                     .get_branch_checked(branch)?
                     .ok_or(BranchDoesNotExist { branch, id: self.id() })?
                 );
-
-                self.inner.id = id;
-                Ok(id)
+                Ok(self.inner.id)
             }
 
             pub fn move_to_child(&mut self, branch: usize) -> NodeId {
-                self.move_to_child_checked(branch).expect(concat!("Invalid state passed to ", stringify!($name),"::move_to_child"))
-            }
-
-            pub unsafe fn move_to_child_unchecked(&mut self, branch: usize) -> NodeId {
-                let id = unsafe {
-                    Id(self.get().branches.get_unchecked(branch).unwrap())
-                };
-
-                self.inner.id = id;
-                id
+                self.inner.id = Id(self.get().get_branch(branch).unwrap());
+                self.inner.id
             }
 
             pub fn move_to_parent_checked(&mut self) -> Result<NodeId, ArenaTreeError<N>> {
@@ -176,20 +139,23 @@ macro_rules! define_cursor {
                     return Err(RootHasNoParent);
                 }
 
-                unsafe {
-                    Ok(self.move_to_parent_unchecked())
-                }
+                Ok(self.move_to_parent_internal())
             }
 
             pub fn move_to_parent(&mut self) -> NodeId {
-                self.move_to_parent_checked().expect(concat!("Invalid state passed to ", stringify!($name),"::move_to_parent"))
+                #[cfg(debug_assertions)]
+                {
+                    self.move_to_parent_checked().unwrap()
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    self.move_to_parent_internal()
+                }
             }
 
-            pub unsafe fn move_to_parent_unchecked(&mut self) -> NodeId {
-                let id = self.get().parent_id;
-
-                self.inner.id = id;
-                id
+            fn move_to_parent_internal(&mut self) -> NodeId {
+                self.inner.id = self.get().parent_id;
+                self.inner.id
             }
         }
     };
@@ -201,9 +167,7 @@ define_cursor!(#[derive(Debug, PartialEq, Eq)], BorrowedArenaTreeCursorMut, mut)
 
 impl<'a, T, const N: usize> BorrowedArenaTreeCursorMut<'a, T, N> {
     pub fn set(&mut self, val: T) {
-        unsafe {
-            self.inner.set_unchecked(val, self.tree)
-        }
+        self.inner.set(val, self.tree)
     }
 
     pub fn add_node_checked(&mut self, val: T, branch: usize) -> Result<usize, ArenaTreeError<N>> {
@@ -211,16 +175,21 @@ impl<'a, T, const N: usize> BorrowedArenaTreeCursorMut<'a, T, N> {
             return Err(BranchOverwrite { id: self.id(), branch });
         }
 
-        unsafe {
-            Ok(self.add_node_unchecked(val, branch))
-        }
+        Ok(self.add_node_internal(val, branch))
     }
 
     pub fn add_node(&mut self, val: T, branch: usize) -> usize {
-        self.add_node_checked(val, branch).expect("Invalid usize passed to BorrowedArenaTreeCursorMut::add_node")
+        #[cfg(debug_assertions)]
+        {
+            self.add_node_checked(val, branch).unwrap()
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self.add_node_internal(val, branch)
+        }
     }
 
-    pub unsafe fn add_node_unchecked(&mut self, val: T, branch: usize) -> usize {
+    fn add_node_internal(&mut self, val: T, branch: usize) -> usize {
         self.tree.add_node(val, self.id(), branch)
     }
 
@@ -235,11 +204,15 @@ impl<'a, T, const N: usize> BorrowedArenaTreeCursorMut<'a, T, N> {
     }
 
     pub fn delete_branch(&mut self, branch: usize) {
-        self.delete_branch_checked(branch).expect("Invalid usize passed for BorrowedArenaTreeCursorMut::delete_branch");
-    }
+        #[cfg(debug_assertions)]
+        {
+            self.delete_branch_checked(branch).unwrap();
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self.tree.delete_branch(self.id(), branch);
+        }
 
-    pub unsafe fn delete_branch_unchecked(&mut self, branch: usize) {
-        self.tree.delete_branch(self.id(), branch);
     }
 
     pub fn as_cursor(&self) -> BorrowedArenaTreeCursor<'_, T, N> {
