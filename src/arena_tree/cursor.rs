@@ -1,4 +1,4 @@
-use super::{NodeId, ArenaTree, Node, ArenaTreeError};
+use super::{NodeId, ArenaTree, Node, ArenaTreeError, Result};
 use std::marker::PhantomData;
 
 use NodeId::*;
@@ -23,7 +23,7 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         self.id
     }
 
-    pub fn get_checked(&self, tree: &'a ArenaTree<T, N>) -> Result<&'a Node<T, N>, ArenaTreeError<N>> {
+    pub fn get_checked(&self, tree: &'a ArenaTree<T, N>) -> Result<&'a Node<T, N>, N> {
         tree.get_checked(self.id)
     }
 
@@ -31,7 +31,7 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         tree.get(self.id)
     }
 
-    pub fn set_checked(&self, val: T, tree: &mut ArenaTree<T, N>) -> Result<(), ArenaTreeError<N>> {
+    pub fn set_checked(&self, val: T, tree: &mut ArenaTree<T, N>) -> Result<(), N> {
         tree.set_checked(self.id, val)
     }
 
@@ -39,7 +39,7 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         tree.set(self.id, val)
     }
 
-    pub fn add_node_checked(&self, val: T, branch: usize, tree: &mut ArenaTree<T, N>) -> Result<usize, ArenaTreeError<N>> {
+    pub fn add_node_checked(&self, val: T, branch: usize, tree: &mut ArenaTree<T, N>) -> Result<usize, N> {
         tree.add_node_checked(val, self.id, branch)
     }
 
@@ -47,7 +47,7 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         tree.add_node(val, self.id, branch)
     }
 
-    pub fn delete_branch_checked(&self, branch: usize, tree: &mut ArenaTree<T, N>) -> Result<(), ArenaTreeError<N>> {
+    pub fn delete_branch_checked(&self, branch: usize, tree: &mut ArenaTree<T, N>) -> Result<(), N> {
         tree.delete_branch_checked(self.id, branch)
     }
 
@@ -55,7 +55,7 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         tree.delete_branch(self.id, branch)
     }
 
-    pub fn move_to_child_checked(&mut self, branch: usize, tree: &ArenaTree<T, N>) -> Result<NodeId, ArenaTreeError<N>> {
+    pub fn move_to_child_checked(&mut self, branch: usize, tree: &ArenaTree<T, N>) -> Result<NodeId, N> {
         self.id = Id(self.get_checked(tree)?
             .get_branch_checked(branch)?
             .ok_or(BranchDoesNotExist { branch, id: self.id })?
@@ -68,7 +68,7 @@ impl<'a, T, const N: usize> ArenaTreeCursor<'a, T, N> {
         self.id
     }
 
-    pub fn move_to_parent_checked(&mut self, tree: &ArenaTree<T, N>) -> Result<NodeId, ArenaTreeError<N>> {
+    pub fn move_to_parent_checked(&mut self, tree: &ArenaTree<T, N>) -> Result<NodeId, N> {
         if self.id == Root {
             return Err(RootHasNoParent);
         }
@@ -121,7 +121,7 @@ macro_rules! define_cursor {
                 self.inner.get(self.tree)
             }
 
-            pub fn move_to_child_checked(&mut self, branch: usize) -> Result<NodeId, ArenaTreeError<N>> {
+            pub fn move_to_child_checked(&mut self, branch: usize) -> Result<NodeId, N> {
                 self.inner.id = Id(self.get()
                     .get_branch_checked(branch)?
                     .ok_or(BranchDoesNotExist { branch, id: self.id() })?
@@ -134,7 +134,7 @@ macro_rules! define_cursor {
                 self.inner.id
             }
 
-            pub fn move_to_parent_checked(&mut self) -> Result<NodeId, ArenaTreeError<N>> {
+            pub fn move_to_parent_checked(&mut self) -> Result<NodeId, N> {
                 if self.id() == Root {
                     return Err(RootHasNoParent);
                 }
@@ -170,7 +170,7 @@ impl<'a, T, const N: usize> BorrowedArenaTreeCursorMut<'a, T, N> {
         self.inner.set(val, self.tree)
     }
 
-    pub fn add_node_checked(&mut self, val: T, branch: usize) -> Result<usize, ArenaTreeError<N>> {
+    pub fn add_node_checked(&mut self, val: T, branch: usize) -> Result<usize, N> {
         if self.get().get_branch_checked(branch)?.is_some() {
             return Err(BranchOverwrite { id: self.id(), branch });
         }
@@ -193,7 +193,7 @@ impl<'a, T, const N: usize> BorrowedArenaTreeCursorMut<'a, T, N> {
         self.tree.add_node(val, self.id(), branch)
     }
 
-    pub fn delete_branch_checked(&mut self, branch: usize) -> Result<(), ArenaTreeError<N>> {
+    pub fn delete_branch_checked(&mut self, branch: usize) -> Result<(), N> {
         match *self.get().get_branch_checked(branch)? {
             None => Err(BranchDoesNotExist { branch, id: self.id() }),
             Some(child_id) => {

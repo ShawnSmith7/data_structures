@@ -9,6 +9,8 @@ use serde::{Serialize, Deserialize};
 use NodeId::*;
 use ArenaTreeError::*;
 
+pub type Result<T, const N: usize> = std::result::Result<T, ArenaTreeError<N>>;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeId {
     Root,
@@ -52,7 +54,7 @@ impl<T, const N: usize> Node<T, N> {
         }
     }
 
-    pub fn get_branch_checked(&self, branch: usize) -> Result<&Option<usize>, ArenaTreeError<N>> {
+    pub fn get_branch_checked(&self, branch: usize) -> Result<&Option<usize>, N> {
         self.branches.get(branch).ok_or(BranchOutOfBounds(branch))
     }
 
@@ -67,7 +69,7 @@ impl<T, const N: usize> Node<T, N> {
         }
     }
 
-    pub fn get_branch_checked_mut(&mut self, branch: usize) -> Result<&mut Option<usize>, ArenaTreeError<N>> {
+    pub fn get_branch_checked_mut(&mut self, branch: usize) -> Result<&mut Option<usize>, N> {
         self.branches.get_mut(branch).ok_or(BranchOutOfBounds(branch))
     }
 
@@ -108,7 +110,7 @@ impl<T, const N: usize> ArenaTree<T, N> {
         }
     }
 
-    pub fn get_checked(&self, id: NodeId) -> Result<&Node<T, N>, ArenaTreeError<N>> {
+    pub fn get_checked(&self, id: NodeId) -> Result<&Node<T, N>, N> {
         match id {
             Root => Ok(&self.root),
             Id(id) => if self.free_ids.contains(&id) {
@@ -135,7 +137,7 @@ impl<T, const N: usize> ArenaTree<T, N> {
         }
     }
 
-    fn get_checked_mut(&mut self, id: NodeId) -> Result<&mut Node<T, N>, ArenaTreeError<N>> {
+    fn get_checked_mut(&mut self, id: NodeId) -> Result<&mut Node<T, N>, N> {
         match id {
             Root => Ok(&mut self.root),
             Id(id) => if self.free_ids.contains(&id) {
@@ -162,7 +164,7 @@ impl<T, const N: usize> ArenaTree<T, N> {
         }
     }
 
-    pub fn set_checked(&mut self, id: NodeId, val: T) -> Result<(), ArenaTreeError<N>> {
+    pub fn set_checked(&mut self, id: NodeId, val: T) -> Result<(), N> {
         self.get_checked_mut(id)?.val = val;
         Ok(())
     }
@@ -171,7 +173,7 @@ impl<T, const N: usize> ArenaTree<T, N> {
         self.get_mut(id).val = val;
     }
 
-    pub fn add_node_checked(&mut self, val: T, parent_id: NodeId, branch: usize) -> Result<usize, ArenaTreeError<N>> {
+    pub fn add_node_checked(&mut self, val: T, parent_id: NodeId, branch: usize) -> Result<usize, N> {
         if self.get_checked(parent_id)?.get_branch_checked(branch)?.is_some() {
             return Err(BranchOverwrite { id: parent_id, branch });
         }
@@ -209,7 +211,7 @@ impl<T, const N: usize> ArenaTree<T, N> {
         id
     }
 
-    pub fn delete_branch_checked(&mut self, id: NodeId, branch: usize) -> Result<(), ArenaTreeError<N>> {
+    pub fn delete_branch_checked(&mut self, id: NodeId, branch: usize) -> Result<(), N> {
         match *self.get_checked(id)?.get_branch_checked(branch)? {
             None => Err(BranchDoesNotExist { branch, id }),
             Some(child_id) => {
