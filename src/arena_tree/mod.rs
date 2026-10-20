@@ -1,7 +1,7 @@
 pub mod cursor;
 mod firebase_array;
 
-use std::{fmt, ops};
+use std::{fmt, ops, result};
 use fmt::{Display, Formatter};
 use ops::Index;
 use serde::{Serialize, Deserialize};
@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 use NodeId::*;
 use ArenaTreeError::*;
 
-pub type Result<T, const N: usize> = std::result::Result<T, ArenaTreeError<N>>;
+pub type Result<T, const N: usize> = result::Result<T, ArenaTreeError<N>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeId {
